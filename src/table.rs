@@ -1,12 +1,11 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use core::cell::RefCell;
 use core::fmt;
 use core::u32;
 use func::FuncRef;
 use module::check_limits;
 use parity_wasm::elements::ResizableLimits;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use Error;
 
 /// Reference to a table (See [`TableInstance`] for details).
@@ -42,14 +41,14 @@ pub struct TableInstance {
     /// Table limits.
     limits: ResizableLimits,
     /// Table memory buffer.
-    buffer: RefCell<Vec<Option<FuncRef>>>,
+    buffer: Arc<Mutex<Vec<Option<FuncRef>>>>,
 }
 
 impl fmt::Debug for TableInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("TableInstance")
             .field("limits", &self.limits)
-            .field("buffer.len", &self.buffer.borrow().len())
+            .field("buffer.len", &self.buffer.lock().unwrap().len())
             .finish()
     }
 }
@@ -73,7 +72,7 @@ impl TableInstance {
     fn new(limits: ResizableLimits) -> Result<TableInstance, Error> {
         check_limits(&limits)?;
         Ok(TableInstance {
-            buffer: RefCell::new(vec![None; limits.initial() as usize]),
+            buffer: Arc::new(Mutex::new(vec![None; limits.initial() as usize])),
             limits: limits,
         })
     }
@@ -95,7 +94,7 @@ impl TableInstance {
 
     /// Returns current size of the table.
     pub fn current_size(&self) -> u32 {
-        self.buffer.borrow().len() as u32
+        self.buffer.lock().unwrap().len() as u32
     }
 
     /// Increases the size of the table by given number of elements.
@@ -104,7 +103,7 @@ impl TableInstance {
     ///
     /// Returns `Err` if tried to allocate more elements than permited by limit.
     pub fn grow(&self, by: u32) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let maximum_size = self.maximum_size().unwrap_or(u32::MAX);
         let new_size = self
             .current_size()
@@ -129,7 +128,7 @@ impl TableInstance {
 
     /// Get the specific value in the table
     pub fn get(&self, offset: u32) -> Result<Option<FuncRef>, Error> {
-        let buffer = self.buffer.borrow();
+        let buffer = self.buffer.lock().unwrap();
         let buffer_len = buffer.len();
         let table_elem = buffer.get(offset as usize).cloned().ok_or_else(|| {
             Error::Table(format!(
@@ -142,7 +141,7 @@ impl TableInstance {
 
     /// Set the table element to the specified function.
     pub fn set(&self, offset: u32, value: Option<FuncRef>) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let buffer_len = buffer.len();
         let table_elem = buffer.get_mut(offset as usize).ok_or_else(|| {
             Error::Table(format!(
