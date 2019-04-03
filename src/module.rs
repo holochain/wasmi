@@ -1,16 +1,14 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use core::cell::RefCell;
 use core::fmt;
 use Trap;
 
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use common::{DEFAULT_MEMORY_INDEX, DEFAULT_TABLE_INDEX};
-use core::cell::Ref;
 use func::{FuncBody, FuncInstance, FuncRef};
 use global::{GlobalInstance, GlobalRef};
 use host::Externals;
@@ -155,74 +153,74 @@ impl ExternVal {
 /// [`invoke_export`]: #method.invoke_export
 #[derive(Debug)]
 pub struct ModuleInstance {
-    signatures: RefCell<Vec<Arc<Signature>>>,
-    tables: RefCell<Vec<TableRef>>,
-    funcs: RefCell<Vec<FuncRef>>,
-    memories: RefCell<Vec<MemoryRef>>,
-    globals: RefCell<Vec<GlobalRef>>,
-    exports: RefCell<HashMap<String, ExternVal>>,
+    signatures: Arc<Mutex<Vec<Arc<Signature>>>>,
+    tables: Arc<Mutex<Vec<TableRef>>>,
+    funcs: Arc<Mutex<Vec<FuncRef>>>,
+    memories: Arc<Mutex<Vec<MemoryRef>>>,
+    globals: Arc<Mutex<Vec<GlobalRef>>>,
+    exports: Arc<Mutex<HashMap<String, ExternVal>>>,
 }
 
 impl ModuleInstance {
     fn default() -> Self {
         ModuleInstance {
-            funcs: RefCell::new(Vec::new()),
-            signatures: RefCell::new(Vec::new()),
-            tables: RefCell::new(Vec::new()),
-            memories: RefCell::new(Vec::new()),
-            globals: RefCell::new(Vec::new()),
-            exports: RefCell::new(HashMap::new()),
+            funcs: Arc::new(Mutex::new(Vec::new())),
+            signatures: Arc::new(Mutex::new(Vec::new())),
+            tables: Arc::new(Mutex::new(Vec::new())),
+            memories: Arc::new(Mutex::new(Vec::new())),
+            globals: Arc::new(Mutex::new(Vec::new())),
+            exports: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub(crate) fn memory_by_index(&self, idx: u32) -> Option<MemoryRef> {
-        self.memories.borrow_mut().get(idx as usize).cloned()
+        self.memories.lock().unwrap().get(idx as usize).cloned()
     }
 
     pub(crate) fn table_by_index(&self, idx: u32) -> Option<TableRef> {
-        self.tables.borrow_mut().get(idx as usize).cloned()
+        self.tables.lock().unwrap().get(idx as usize).cloned()
     }
 
     pub(crate) fn global_by_index(&self, idx: u32) -> Option<GlobalRef> {
-        self.globals.borrow_mut().get(idx as usize).cloned()
+        self.globals.lock().unwrap().get(idx as usize).cloned()
     }
 
     pub(crate) fn func_by_index(&self, idx: u32) -> Option<FuncRef> {
-        self.funcs.borrow().get(idx as usize).cloned()
+        self.funcs.lock().unwrap().get(idx as usize).cloned()
     }
 
     pub(crate) fn signature_by_index(&self, idx: u32) -> Option<Arc<Signature>> {
-        self.signatures.borrow().get(idx as usize).cloned()
+        self.signatures.lock().unwrap().get(idx as usize).cloned()
     }
 
     fn push_func(&self, func: FuncRef) {
-        self.funcs.borrow_mut().push(func);
+        self.funcs.lock().unwrap().push(func);
     }
 
     fn push_signature(&self, signature: Arc<Signature>) {
-        self.signatures.borrow_mut().push(signature)
+        self.signatures.lock().unwrap().push(signature)
     }
 
     fn push_memory(&self, memory: MemoryRef) {
-        self.memories.borrow_mut().push(memory)
+        self.memories.lock().unwrap().push(memory)
     }
 
     fn push_table(&self, table: TableRef) {
-        self.tables.borrow_mut().push(table)
+        self.tables.lock().unwrap().push(table)
     }
 
     fn push_global(&self, global: GlobalRef) {
-        self.globals.borrow_mut().push(global)
+        self.globals.lock().unwrap().push(global)
     }
 
     /// Access all globals. This is a non-standard API so it's unlikely to be
     /// portable to other engines.
-    pub fn globals<'a>(&self) -> Ref<Vec<GlobalRef>> {
-        self.globals.borrow()
-    }
+    //pub fn globals<'a>(&self) -> Ref<Vec<GlobalRef>> {
+    //    self.globals.lock().unwrap()
+   // }
 
     fn insert_export<N: Into<String>>(&self, name: N, extern_val: ExternVal) {
-        self.exports.borrow_mut().insert(name.into(), extern_val);
+        self.exports.lock().unwrap().insert(name.into(), extern_val);
     }
 
     fn alloc_module<'i, I: Iterator<Item = &'i ExternVal>>(
@@ -645,7 +643,7 @@ impl ModuleInstance {
     ///
     /// Returns `None` if there is no export with such name.
     pub fn export_by_name(&self, name: &str) -> Option<ExternVal> {
-        self.exports.borrow().get(name).cloned()
+        self.exports.lock().unwrap().get(name).cloned()
     }
 }
 
