@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt;
 use Trap;
@@ -8,7 +7,7 @@ use Trap;
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use common::{DEFAULT_MEMORY_INDEX, DEFAULT_TABLE_INDEX};
 use core::cell::Ref;
@@ -37,7 +36,7 @@ use {Error, MemoryInstance, Module, RuntimeValue, Signature, TableInstance};
 ///
 /// [`ModuleInstance`]: struct.ModuleInstance.html
 #[derive(Clone, Debug)]
-pub struct ModuleRef(pub(crate) Rc<ModuleInstance>);
+pub struct ModuleRef(pub(crate) Arc<ModuleInstance>);
 
 impl ::core::ops::Deref for ModuleRef {
     type Target = ModuleInstance;
@@ -156,7 +155,7 @@ impl ExternVal {
 /// [`invoke_export`]: #method.invoke_export
 #[derive(Debug)]
 pub struct ModuleInstance {
-    signatures: RefCell<Vec<Rc<Signature>>>,
+    signatures: RefCell<Vec<Arc<Signature>>>,
     tables: RefCell<Vec<TableRef>>,
     funcs: RefCell<Vec<FuncRef>>,
     memories: RefCell<Vec<MemoryRef>>,
@@ -192,7 +191,7 @@ impl ModuleInstance {
         self.funcs.borrow().get(idx as usize).cloned()
     }
 
-    pub(crate) fn signature_by_index(&self, idx: u32) -> Option<Rc<Signature>> {
+    pub(crate) fn signature_by_index(&self, idx: u32) -> Option<Arc<Signature>> {
         self.signatures.borrow().get(idx as usize).cloned()
     }
 
@@ -200,7 +199,7 @@ impl ModuleInstance {
         self.funcs.borrow_mut().push(func);
     }
 
-    fn push_signature(&self, signature: Rc<Signature>) {
+    fn push_signature(&self, signature: Arc<Signature>) {
         self.signatures.borrow_mut().push(signature)
     }
 
@@ -231,10 +230,10 @@ impl ModuleInstance {
         extern_vals: I,
     ) -> Result<ModuleRef, Error> {
         let module = loaded_module.module();
-        let instance = ModuleRef(Rc::new(ModuleInstance::default()));
+        let instance = ModuleRef(Arc::new(ModuleInstance::default()));
 
         for &Type::Function(ref ty) in module.type_section().map(|ts| ts.types()).unwrap_or(&[]) {
-            let signature = Rc::new(Signature::from_elements(ty));
+            let signature = Arc::new(Signature::from_elements(ty));
             instance.push_signature(signature);
         }
 
@@ -329,7 +328,7 @@ impl ModuleInstance {
                     code: code,
                 };
                 let func_instance =
-                    FuncInstance::alloc_internal(Rc::downgrade(&instance.0), signature, func_body);
+                    FuncInstance::alloc_internal(Arc::downgrade(&instance.0), signature, func_body);
                 instance.push_func(func_instance);
             }
         }

@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use alloc::rc::Rc;
 use core::cell::{Cell, RefCell};
 use core::cmp;
 use core::fmt;
@@ -8,6 +7,7 @@ use core::ops::Range;
 use core::u32;
 use memory_units::{Bytes, Pages, RoundUpTo};
 use parity_wasm::elements::ResizableLimits;
+use std::sync::Arc;
 use value::LittleEndianConvert;
 use Error;
 
@@ -28,7 +28,7 @@ const LINEAR_MEMORY_MAX_PAGES: Pages = Pages(65536);
 /// [`MemoryInstance`]: struct.MemoryInstance.html
 ///
 #[derive(Clone, Debug)]
-pub struct MemoryRef(Rc<MemoryInstance>);
+pub struct MemoryRef(Arc<MemoryInstance>);
 
 impl ::core::ops::Deref for MemoryRef {
     type Target = MemoryInstance;
@@ -114,7 +114,7 @@ impl MemoryInstance {
         validate_memory(initial, maximum).map_err(Error::Memory)?;
 
         let memory = MemoryInstance::new(initial, maximum);
-        Ok(MemoryRef(Rc::new(memory)))
+        Ok(MemoryRef(Arc::new(memory)))
     }
 
     /// Create new linear memory instance.
@@ -460,7 +460,7 @@ impl MemoryInstance {
         dst_offset: usize,
         len: usize,
     ) -> Result<(), Error> {
-        if Rc::ptr_eq(&src.0, &dst.0) {
+        if Arc::ptr_eq(&src.0, &dst.0) {
             // `transfer` is invoked with with same source and destination. Let's assume that regions may
             // overlap and use `copy`.
             return src.copy(src_offset, dst_offset, len);

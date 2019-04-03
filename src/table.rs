@@ -1,12 +1,12 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt;
 use core::u32;
 use func::FuncRef;
 use module::check_limits;
 use parity_wasm::elements::ResizableLimits;
+use std::sync::Arc;
 use Error;
 
 /// Reference to a table (See [`TableInstance`] for details).
@@ -16,7 +16,7 @@ use Error;
 /// [`TableInstance`]: struct.TableInstance.html
 ///
 #[derive(Clone, Debug)]
-pub struct TableRef(Rc<TableInstance>);
+pub struct TableRef(Arc<TableInstance>);
 
 impl ::core::ops::Deref for TableRef {
     type Target = TableInstance;
@@ -67,7 +67,7 @@ impl TableInstance {
     /// Returns `Err` if `initial_size` is greater than `maximum_size`.
     pub fn alloc(initial_size: u32, maximum_size: Option<u32>) -> Result<TableRef, Error> {
         let table = TableInstance::new(ResizableLimits::new(initial_size, maximum_size))?;
-        Ok(TableRef(Rc::new(table)))
+        Ok(TableRef(Arc::new(table)))
     }
 
     fn new(limits: ResizableLimits) -> Result<TableInstance, Error> {
