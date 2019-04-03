@@ -579,7 +579,7 @@ mod tests {
 
     use super::{MemoryInstance, MemoryRef, LINEAR_MEMORY_PAGE_SIZE};
     use memory_units::Pages;
-    use std::rc::Rc;
+    use std::sync::Arc;
     use Error;
 
     #[test]
@@ -681,8 +681,8 @@ mod tests {
 
     #[test]
     fn transfer_works() {
-        let src = MemoryRef(Rc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
-        let dst = MemoryRef(Rc::new(create_memory(&[
+        let src = MemoryRef(Arc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
+        let dst = MemoryRef(Arc::new(create_memory(&[
             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         ])));
 
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn transfer_still_works_with_same_memory() {
-        let src = MemoryRef(Rc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
+        let src = MemoryRef(Arc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
 
         MemoryInstance::transfer(&src, 4, &src, 0, 3).unwrap();
 
@@ -706,7 +706,7 @@ mod tests {
 
     #[test]
     fn transfer_oob_with_same_memory_errors() {
-        let src = MemoryRef(Rc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
+        let src = MemoryRef(Arc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
         assert!(MemoryInstance::transfer(&src, 65535, &src, 0, 3).is_err());
 
         // Check that memories content left untouched
@@ -715,8 +715,8 @@ mod tests {
 
     #[test]
     fn transfer_oob_errors() {
-        let src = MemoryRef(Rc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
-        let dst = MemoryRef(Rc::new(create_memory(&[
+        let src = MemoryRef(Arc::new(create_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])));
+        let dst = MemoryRef(Arc::new(create_memory(&[
             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         ])));
 
