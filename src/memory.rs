@@ -1,13 +1,13 @@
 #[allow(unused_imports)]
 use alloc::prelude::*;
-use core::cell::{Cell, RefCell};
+use core::cell::Cell;
 use core::cmp;
 use core::fmt;
 use core::ops::Range;
 use core::u32;
 use memory_units::{Bytes, Pages, RoundUpTo};
 use parity_wasm::elements::ResizableLimits;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use value::LittleEndianConvert;
 use Error;
 
@@ -54,7 +54,7 @@ pub struct MemoryInstance {
     /// Memory limits.
     limits: ResizableLimits,
     /// Linear memory buffer with lazy allocation.
-    buffer: RefCell<Vec<u8>>,
+    buffer: Arc<Mutex<Vec<u8>>>,
     initial: Pages,
     current_size: Cell<usize>,
     maximum: Option<Pages>,
@@ -65,7 +65,7 @@ impl fmt::Debug for MemoryInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("MemoryInstance")
             .field("limits", &self.limits)
-            .field("buffer.len", &self.buffer.borrow().len())
+            .field("buffer.len", &self.buffer.lock().unwrap().len())
             .field("maximum", &self.maximum)
             .field("initial", &self.initial)
             .finish()
@@ -124,7 +124,7 @@ impl MemoryInstance {
         let initial_size: Bytes = initial.into();
         MemoryInstance {
             limits: limits,
-            buffer: RefCell::new(Vec::with_capacity(4096)),
+            buffer: Arc::new(Mutex::new(Vec::with_capacity(4096))),
             initial: initial,
             current_size: Cell::new(initial_size.0),
             maximum: maximum,
@@ -186,12 +186,12 @@ impl MemoryInstance {
     /// Returns current used memory size in bytes.
     /// This is one more than the highest memory address that had been written to.
     pub fn used_size(&self) -> Bytes {
-        Bytes(self.buffer.borrow().len())
+        Bytes(self.buffer.lock().unwrap().len())
     }
 
     /// Get value from memory at given offset.
     pub fn get_value<T: LittleEndianConvert>(&self, offset: u32) -> Result<T, Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let region =
             self.checked_region(&mut buffer, offset as usize, ::core::mem::size_of::<T>())?;
         Ok(T::from_little_endian(&buffer[region.range()]).expect("Slice size is checked"))
@@ -204,7 +204,7 @@ impl MemoryInstance {
     ///
     /// [`get_into`]: #method.get_into
     pub fn get(&self, offset: u32, size: usize) -> Result<Vec<u8>, Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let region = self.checked_region(&mut buffer, offset as usize, size)?;
 
         Ok(buffer[region.range()].to_vec())
@@ -216,7 +216,7 @@ impl MemoryInstance {
     ///
     /// Returns `Err` if the specified region is out of bounds.
     pub fn get_into(&self, offset: u32, target: &mut [u8]) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let region = self.checked_region(&mut buffer, offset as usize, target.len())?;
 
         target.copy_from_slice(&buffer[region.range()]);
@@ -226,7 +226,7 @@ impl MemoryInstance {
 
     /// Copy data in the memory at given offset.
     pub fn set(&self, offset: u32, value: &[u8]) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let range = self
             .checked_region(&mut buffer, offset as usize, value.len())?
             .range();
@@ -241,7 +241,7 @@ impl MemoryInstance {
 
     /// Copy value in the memory at given offset.
     pub fn set_value<T: LittleEndianConvert>(&self, offset: u32, value: T) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
         let range = self
             .checked_region(&mut buffer, offset as usize, ::core::mem::size_of::<T>())?
             .range();
@@ -387,7 +387,7 @@ impl MemoryInstance {
     ///
     /// Returns `Err` if either of specified regions is out of bounds.
     pub fn copy(&self, src_offset: usize, dst_offset: usize, len: usize) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
 
         let (read_region, write_region) =
             self.checked_region_pair(&mut buffer, src_offset, len, dst_offset, len)?;
@@ -424,7 +424,7 @@ impl MemoryInstance {
         dst_offset: usize,
         len: usize,
     ) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
 
         let (read_region, write_region) =
             self.checked_region_pair(&mut buffer, src_offset, len, dst_offset, len)?;
@@ -468,8 +468,8 @@ impl MemoryInstance {
 
         // Because memory references point to different memory instances, it is safe to `borrow_mut`
         // both buffers at once (modulo `with_direct_access_mut`).
-        let mut src_buffer = src.buffer.borrow_mut();
-        let mut dst_buffer = dst.buffer.borrow_mut();
+        let mut src_buffer = src.buffer.lock().unwrap();
+        let mut dst_buffer = dst.buffer.lock().unwrap();
 
         let src_range = src
             .checked_region(&mut src_buffer, src_offset, len)?
@@ -495,7 +495,7 @@ impl MemoryInstance {
     ///
     /// Returns `Err` if the specified region is out of bounds.
     pub fn clear(&self, offset: usize, new_val: u8, len: usize) -> Result<(), Error> {
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = self.buffer.lock().unwrap();
 
         let range = self.checked_region(&mut buffer, offset, len)?.range();
 
@@ -528,7 +528,7 @@ impl MemoryInstance {
     /// [`set`]: #method.get
     /// [`clear`]: #method.set
     pub fn with_direct_access<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-        let buf = self.buffer.borrow();
+        let buf = self.buffer.lock().unwrap();
         f(&*buf)
     }
 
@@ -544,7 +544,7 @@ impl MemoryInstance {
     /// [`set`]: #method.set
     /// [`copy`]: #method.copy
     pub fn with_direct_access_mut<R, F: FnOnce(&mut Vec<u8>) -> R>(&self, f: F) -> R {
-        let mut buf = self.buffer.borrow_mut();
+        let mut buf = self.buffer.lock().unwrap();
         f(&mut buf)
     }
 }
