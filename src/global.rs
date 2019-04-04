@@ -1,5 +1,6 @@
 use core::cell::Cell;
 use parity_wasm::elements::ValueType as EValueType;
+use parking_lot::ReentrantMutex;
 use std::sync::Arc;
 use types::ValueType;
 use value::RuntimeValue;
@@ -33,7 +34,7 @@ impl ::core::ops::Deref for GlobalRef {
 /// [`I64`]: enum.RuntimeValue.html#variant.I64
 #[derive(Debug)]
 pub struct GlobalInstance {
-    val: Cell<RuntimeValue>,
+    val: Arc<ReentrantMutex<Cell<RuntimeValue>>>,
     mutable: bool,
 }
 
@@ -44,7 +45,7 @@ impl GlobalInstance {
     /// users likely want to set `mutable` to `false`.
     pub fn alloc(val: RuntimeValue, mutable: bool) -> GlobalRef {
         GlobalRef(Arc::new(GlobalInstance {
-            val: Cell::new(val),
+            val: Arc::new(ReentrantMutex::new(Cell::new(val))),
             mutable,
         }))
     }
@@ -64,13 +65,13 @@ impl GlobalInstance {
         if self.value_type() != val.value_type() {
             return Err(Error::Global("Attempt to change variable type".into()));
         }
-        self.val.set(val);
+        self.val.lock().set(val);
         Ok(())
     }
 
     /// Get the value of this global variable.
     pub fn get(&self) -> RuntimeValue {
-        self.val.get()
+        self.val.lock().get()
     }
 
     /// Returns if this global variable is mutable.
@@ -82,7 +83,7 @@ impl GlobalInstance {
 
     /// Returns value type of this global variable.
     pub fn value_type(&self) -> ValueType {
-        self.val.get().value_type()
+        self.val.lock().get().value_type()
     }
 
     pub(crate) fn elements_value_type(&self) -> EValueType {
