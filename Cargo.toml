@@ -23,6 +23,7 @@ parity-wasm = { version = "0.31", default-features = false }
 hashbrown = { version = "0.1.8", optional = true }
 memory_units = "0.3.0"
 libm = { version = "0.1.2", optional = true }
+parking_lot = "0.7"
 
 [dev-dependencies]
 assert_matches = "1.1"

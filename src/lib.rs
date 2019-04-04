@@ -129,6 +129,8 @@ use std::error;
 #[cfg(not(feature = "std"))]
 extern crate libm;
 
+extern crate parking_lot;
+
 /// Error type which can be thrown by wasm code or by host environment.
 ///
 /// Under some conditions, wasm execution may produce a `Trap`, which immediately aborts execution.
