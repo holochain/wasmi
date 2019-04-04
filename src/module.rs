@@ -6,7 +6,10 @@ use Trap;
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use common::{DEFAULT_MEMORY_INDEX, DEFAULT_TABLE_INDEX};
 use func::{FuncBody, FuncInstance, FuncRef};
@@ -217,7 +220,7 @@ impl ModuleInstance {
     /// portable to other engines.
     //pub fn globals<'a>(&self) -> Ref<Vec<GlobalRef>> {
     //    self.globals.lock().unwrap()
-   // }
+    // }
 
     fn insert_export<N: Into<String>>(&self, name: N, extern_val: ExternVal) {
         self.exports.lock().unwrap().insert(name.into(), extern_val);
