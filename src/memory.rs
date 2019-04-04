@@ -57,9 +57,9 @@ pub struct MemoryInstance {
     /// Linear memory buffer with lazy allocation.
     buffer: Arc<ReentrantMutex<RefCell<Vec<u8>>>>,
     initial: Pages,
-    current_size: Cell<usize>,
+    current_size: Arc<ReentrantMutex<Cell<usize>>>,
     maximum: Option<Pages>,
-    lowest_used: Cell<u32>,
+    lowest_used: Arc<ReentrantMutex<Cell<u32>>>,
 }
 
 impl fmt::Debug for MemoryInstance {
@@ -129,9 +129,9 @@ impl MemoryInstance {
             limits: limits,
             buffer: Arc::new(ReentrantMutex::new(RefCell::new(Vec::with_capacity(4096)))),
             initial: initial,
-            current_size: Cell::new(initial_size.0),
+            current_size: Arc::new(ReentrantMutex::new(Cell::new(initial_size.0))),
             maximum: maximum,
-            lowest_used: Cell::new(u32::max_value()),
+            lowest_used: Arc::new(ReentrantMutex::new(Cell::new(u32::max_value()))),
         }
     }
 
@@ -155,12 +155,12 @@ impl MemoryInstance {
 
     /// Returns lowest offset ever written or `u32::max_value()` if none.
     pub fn lowest_used(&self) -> u32 {
-        self.lowest_used.get()
+        self.lowest_used.lock().get()
     }
 
     /// Resets tracked lowest offset.
     pub fn reset_lowest_used(&self, addr: u32) {
-        self.lowest_used.set(addr)
+        self.lowest_used.lock().set(addr)
     }
 
     /// Returns current linear memory size.
@@ -183,7 +183,7 @@ impl MemoryInstance {
     /// );
     /// ```
     pub fn current_size(&self) -> Pages {
-        Bytes(self.current_size.get()).round_up_to()
+        Bytes(self.current_size.lock().get()).round_up_to()
     }
 
     /// Returns current used memory size in bytes.
@@ -240,8 +240,8 @@ impl MemoryInstance {
             .checked_region(&mut buffer, offset as usize, value.len())?
             .range();
 
-        if offset < self.lowest_used.get() {
-            self.lowest_used.set(offset);
+        if offset < self.lowest_used.lock().get() {
+            self.lowest_used.lock().set(offset);
         }
         buffer[range].copy_from_slice(value);
 
@@ -255,8 +255,8 @@ impl MemoryInstance {
         let range = self
             .checked_region(&mut buffer, offset as usize, ::core::mem::size_of::<T>())?
             .range();
-        if offset < self.lowest_used.get() {
-            self.lowest_used.set(offset);
+        if offset < self.lowest_used.lock().get() {
+            self.lowest_used.lock().set(offset);
         }
         value.into_little_endian(&mut buffer[range]);
         Ok(())
@@ -290,7 +290,7 @@ impl MemoryInstance {
         }
 
         let new_buffer_length: Bytes = new_size.into();
-        self.current_size.set(new_buffer_length.0);
+        self.current_size.lock().set(new_buffer_length.0);
         Ok(size_before_grow)
     }
 
@@ -310,7 +310,7 @@ impl MemoryInstance {
             ))
         })?;
 
-        if end <= self.current_size.get() && buffer.len() < end {
+        if end <= self.current_size.lock().get() && buffer.len() < end {
             buffer.resize(end, 0);
         }
 
@@ -355,7 +355,7 @@ impl MemoryInstance {
         })?;
 
         let max = cmp::max(end1, end2);
-        if max <= self.current_size.get() && buffer.len() < max {
+        if max <= self.current_size.lock().get() && buffer.len() < max {
             buffer.resize(max, 0);
         }
 
@@ -403,8 +403,8 @@ impl MemoryInstance {
         let (read_region, write_region) =
             self.checked_region_pair(&mut buffer, src_offset, len, dst_offset, len)?;
 
-        if dst_offset < self.lowest_used.get() as usize {
-            self.lowest_used.set(dst_offset as u32);
+        if dst_offset < self.lowest_used.lock().get() as usize {
+            self.lowest_used.lock().set(dst_offset as u32);
         }
 
         unsafe {
@@ -447,8 +447,8 @@ impl MemoryInstance {
             )));
         }
 
-        if dst_offset < self.lowest_used.get() as usize {
-            self.lowest_used.set(dst_offset as u32);
+        if dst_offset < self.lowest_used.lock().get() as usize {
+            self.lowest_used.lock().set(dst_offset as u32);
         }
 
         unsafe {
@@ -492,8 +492,8 @@ impl MemoryInstance {
             .checked_region(&mut dst_buffer, dst_offset, len)?
             .range();
 
-        if dst_offset < dst.lowest_used.get() as usize {
-            dst.lowest_used.set(dst_offset as u32);
+        if dst_offset < dst.lowest_used.lock().get() as usize {
+            dst.lowest_used.lock().set(dst_offset as u32);
         }
 
         dst_buffer[dst_range].copy_from_slice(&src_buffer[src_range]);
@@ -514,8 +514,8 @@ impl MemoryInstance {
 
         let range = self.checked_region(&mut buffer, offset, len)?.range();
 
-        if offset < self.lowest_used.get() as usize {
-            self.lowest_used.set(offset as u32);
+        if offset < self.lowest_used.lock().get() as usize {
+            self.lowest_used.lock().set(offset as u32);
         }
 
         for val in &mut buffer[range] {
